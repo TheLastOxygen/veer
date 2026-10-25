@@ -81,7 +81,7 @@ class InProcessTest(unittest.TestCase):
         self.assertEqual(reply.status, 200)
         self.assertEqual(answer['ReceiverComputerName'], 'Test Receiver (Veer)')
         self.assertTrue(answer['IsAirDropable'])
-        self.assertTrue(reply.headers['Server'].startswith('Veer/'))
+        self.assertEqual(reply.headers['Server'], config.SERVER_VERSION)
 
     def test_accepted_files_are_stored_and_marked(self):
         running = self.start()

@@ -253,6 +253,9 @@ class Handler(BaseHTTPRequestHandler):
     accepted = None
     accepted_tid = None
 
+    def version_string(self):
+        return self.server_version
+
     def setup(self):
         self.request.settimeout(transfer.READ_IDLE_TIMEOUT_SECONDS)
         # The handshake runs on this connection's own thread: done in accept,

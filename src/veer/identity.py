@@ -78,6 +78,16 @@ def ensure(keys_dir=None):
     return certificate, key
 
 
+def _log_keys(context):
+    """With SSLKEYLOGFILE set, write the session keys there so that Wireshark
+    can decrypt a capture while debugging. Off unless asked for."""
+    path = os.environ.get('SSLKEYLOGFILE')
+    if path:
+        context.keylog_filename = path
+        log.warning('writing TLS session keys to %s (SSLKEYLOGFILE)', path)
+    return context
+
+
 def server_context(keys_dir=None):
     certificate, key = ensure(keys_dir)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -85,7 +95,7 @@ def server_context(keys_dir=None):
     context.load_cert_chain(certificate, key)
     # Senders present self-signed certificates, so none is asked for.
     context.verify_mode = ssl.CERT_NONE
-    return context
+    return _log_keys(context)
 
 
 def client_context(keys_dir=None):
@@ -97,4 +107,4 @@ def client_context(keys_dir=None):
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     context.load_cert_chain(certificate, key)
-    return context
+    return _log_keys(context)
