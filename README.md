@@ -29,4 +29,7 @@ trademarks of Apple Inc., registered in the U.S. and other countries.
 
 ## License
 
-To be decided (see the Phase 0 notes); MIT is the current proposal.
+MIT, see [LICENSE](LICENSE). Parts adapted from
+[winawdl](https://github.com/raph559/winawdl) and
+[omdrop](https://github.com/brentkearney/omdrop-plugin), both MIT, will carry
+their original copyright notices.

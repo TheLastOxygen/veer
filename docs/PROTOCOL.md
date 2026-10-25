@@ -158,7 +158,8 @@ code) **[paper/code]**:
   -newkey rsa:2048 -nodes -x509 -days 365`; winawdl finds the OpenSSL that
   Git for Windows ships **[code]**. Python's standard library cannot create
   a certificate, so Veer must either do the same or depend on
-  `cryptography`. (Decision for Phase 1.)
+  `cryptography`. Decided: Veer depends on `cryptography`, so that it does
+  not need Git for Windows or any other OpenSSL installation.
 
 ## 3. HTTP/1.1
 
