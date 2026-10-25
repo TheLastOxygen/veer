@@ -1,6 +1,6 @@
-# Ferry
+# Veer
 
-Ferry is an open source tool for Windows 11 that exchanges files with Macs
+Veer is an open source tool for Windows 11 that exchanges files with Macs
 using the AirDrop protocol over the local network (Wi-Fi or Ethernet), with no
 extra hardware.
 
@@ -11,7 +11,7 @@ extra hardware.
 AirDrop normally runs over AWDL, Apple's proprietary peer-to-peer Wi-Fi link,
 which Windows cannot speak. A Mac can be told to look for and announce AirDrop
 over every network interface instead
-(`defaults write com.apple.NetworkBrowser BrowseAllInterfaces 1`). Ferry relies
+(`defaults write com.apple.NetworkBrowser BrowseAllInterfaces 1`). Veer relies
 on that: it uses ordinary multicast DNS (`_airdrop._tcp`) and HTTPS on the LAN
 the PC and the Mac already share. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -23,7 +23,7 @@ the PC and the Mac already share. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Disclaimer
 
-Ferry is an independent project. It is not affiliated with, authorized,
+Veer is an independent project. It is not affiliated with, authorized,
 sponsored or endorsed by Apple Inc. AirDrop, Mac, macOS, iPhone and iPad are
 trademarks of Apple Inc., registered in the U.S. and other countries.
 

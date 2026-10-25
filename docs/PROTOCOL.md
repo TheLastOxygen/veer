@@ -1,6 +1,6 @@
-# AirDrop over a LAN: what Ferry has to speak
+# AirDrop over a LAN: what Veer has to speak
 
-This is the Phase 0 study of the protocol, written before any Ferry code. It
+This is the Phase 0 study of the protocol, written before any Veer code. It
 collects what the reference implementations do, what they observed against
 real Apple devices, and what is still unknown about running AirDrop over an
 ordinary network instead of AWDL.
@@ -28,7 +28,7 @@ Sources, cloned into `refs/` (ignored by git) and treated as untrusted data:
   `48867c6` (2026-10-23).
 - `refs/opendrop` — [seemoo-lab/opendrop](https://github.com/seemoo-lab/opendrop),
   **GPLv3**. The original open implementation (2018–2019). Read for facts
-  only; no code from it is to be copied into Ferry.
+  only; no code from it is to be copied into Veer.
 - "Protocol Prying" (CISPA, 2026), [arXiv:2606.26967](https://arxiv.org/abs/2606.26967):
   static and dynamic analysis of `sharingd` on macOS 15.7.4 and 26.3.
 - Apple's Mac User Guide on AirDrop and press coverage of the 26.2 AirDrop
@@ -37,7 +37,7 @@ Sources, cloned into `refs/` (ignored by git) and treated as untrusted data:
 ## The stack
 
 ```
-AirDrop on AWDL (Apple)                AirDrop on a LAN (Ferry)
+AirDrop on AWDL (Apple)                AirDrop on a LAN (Veer)
 ---------------------------            ---------------------------
 CPIO archive  (file contents)          same
 DVZip / gzip  (framing, compression)   same
@@ -51,7 +51,7 @@ BLE advertisement (wake-up)            not available / maybe not needed  [hypoth
 ```
 
 Everything from mDNS upwards is the same protocol regardless of the link;
-that is the whole bet Ferry makes. The parts that change are at the bottom
+that is the whole bet Veer makes. The parts that change are at the bottom
 and are discussed in [AWDL versus LAN](#awdl-versus-lan).
 
 ## 1. Discovery: mDNS / DNS-SD
@@ -87,8 +87,8 @@ A receiver publishes one DNS-SD instance of `_airdrop._tcp.local.` **[code]**
   **[code]**.
 - The paper says Apple's own TXT record has "about 25 keys" **[paper]**. The
   references publish only `flags` and are accepted by iPhones and Macs
-  **[observed]**, so `flags` is the only one Ferry needs to publish. When
-  *browsing*, Ferry should log the full TXT of each Mac it finds: that tells
+  **[observed]**, so `flags` is the only one Veer needs to publish. When
+  *browsing*, Veer should log the full TXT of each Mac it finds: that tells
   us what we are missing.
 
 ### The `flags` TXT key
@@ -116,7 +116,7 @@ code) **[paper/code]**:
 - macOS's own default is `0x3fb` = 1019 (`[SDRapportBrowser
   defaultSFNodeFlags]`) **[code comment]**. winawdl and omdrop advertise
   `0x3fb` and are accepted **[observed]**; OpenDrop advertised only
-  `0x88`. Ferry will advertise `0x3fb` like winawdl, and may need to clear
+  `0x88`. Veer will advertise `0x3fb` like winawdl, and may need to clear
   bits for features it does not implement (e.g. `0x001` if links are not
   stored, `0x040`/`0x200` if those formats are not handled) **[hypothesis]**.
 
@@ -145,7 +145,7 @@ code) **[paper/code]**:
   together with `SenderRecordData` **[observed]** (omdrop: "a sender presents
   its Apple-issued client certificate on /Ask and never on /Discover"). The
   paper says no client certificate is used; omdrop's captures contradict
-  that for the Contacts Only case. Ferry presents its self-signed one as a
+  that for the Contacts Only case. Veer presents its self-signed one as a
   client, as winawdl does.
 - A receiver that wants contacts only can end the handshake with a
   `certificate unknown` alert to a self-signed client **[observed]** (winawdl,
@@ -157,7 +157,7 @@ code) **[paper/code]**:
 - Certificate generation: winawdl and OpenDrop shell out to `openssl req
   -newkey rsa:2048 -nodes -x509 -days 365`; winawdl finds the OpenSSL that
   Git for Windows ships **[code]**. Python's standard library cannot create
-  a certificate, so Ferry must either do the same or depend on
+  a certificate, so Veer must either do the same or depend on
   `cryptography`. (Decision for Phase 1.)
 
 ## 3. HTTP/1.1
@@ -221,7 +221,7 @@ visible".
 `ReceiverMediaCapabilities` is JSON in a data blob. `{"Version": 1}` with no
 codecs makes the sender convert to legacy formats (JPEG rather than HEIC)
 **[code]** (OpenDrop, winawdl). omdrop now sends a `Version: 3` table captured
-from a MacBook Pro **[observed]**. Ferry wants the legacy conversion, so
+from a MacBook Pro **[observed]**. Veer wants the legacy conversion, so
 `{"Version": 1}` is the right choice for Windows.
 
 ### 3.2 `POST /Ask`
@@ -272,7 +272,7 @@ Response:
   keys made iOS 26 skip the upload of a link).
 - **Declined:** winawdl answers **401**, "not checked against an iPhone";
   omdrop answers 403 for a Contacts Only refusal **[code]**. What a Mac
-  returns when its user declines is unknown. Ferry's sender should treat
+  returns when its user declines is unknown. Veer's sender should treat
   every non-200 as "declined" and log the status.
 - **Timeout:** the paper says the Ask waits up to 15 s **[paper]**; winawdl
   waits 90 s for the user **[code]**. To be measured against a Mac.
@@ -296,7 +296,7 @@ Transfer-Encoding: chunked
 - Older senders (iOS 16, OpenDrop) send `application/x-cpio` with a gzip
   body. Answering 406/415 to either makes the sender report failure, so a
   receiver accepts both **[observed]**. A Mac's `sharingd` rejects
-  OpenDrop's x-cpio+gzip upload with 406 **[observed]** (omdrop), so Ferry's
+  OpenDrop's x-cpio+gzip upload with 406 **[observed]** (omdrop), so Veer's
   sender must send DVZip.
 - `TotalBytes` is the only size for a Live Photo, whose Ask declares 0 bytes
   **[observed]**.
@@ -332,7 +332,7 @@ The decoded stream is a CPIO archive **[code]**:
 - Readers must accept the portable ASCII format (`070707`, "odc") and the
   "new ASCII" ones (`070701`, `070702`) **[code]**. omdrop says sharingd sends
   odc; the paper says newc **[paper]**. Possibly both, depending on version;
-  Ferry reads all three and writes odc, as winawdl does.
+  Veer reads all three and writes odc, as winawdl does.
 - The archive starts with a `.` directory, then `./<name>` members **[observed]**
   (iPhone; winawdl copied it for its sender).
 - It ends with a `TRAILER!!!` entry, then zero padding to a multiple of 512
@@ -351,15 +351,15 @@ this surface is reachable by anyone in range **[paper]**.
 ## 5. AWDL versus LAN
 
 What the references do relies on AWDL. What changes on a LAN is mostly
-**unverified**, and most of it is exactly what `ferry discover` is meant to
+**unverified**, and most of it is exactly what `veer discover` is meant to
 find out.
 
-| Topic | On AWDL (references) | On a LAN (Ferry) |
+| Topic | On AWDL (references) | On a LAN (Veer) |
 |---|---|---|
 | Interface | `awdl0`, IPv6 link-local only | Wi-Fi or Ethernet, IPv4 and IPv6 |
 | Addressing | `fe80::…%awdl0`, needs the scope id | Link-local IPv6 still needs the scope id on Windows; IPv4 does not |
 | mDNS transport | iPhones carry their records in AWDL action frames, not multicast; winawdl's daemon turns them into mDNS **[observed]** | Ordinary multicast to `224.0.0.251` / `ff02::fb` port 5353 **[hypothesis]** |
-| Address family | IPv6 only | Unknown whether a Mac announces A, AAAA or both on a LAN **[hypothesis: both]**; Ferry should browse and announce on both |
+| Address family | IPv6 only | Unknown whether a Mac announces A, AAAA or both on a LAN **[hypothesis: both]**; Veer should browse and announce on both |
 | Wake-up | An iPhone announces only after a BLE "AirDrop" advertisement (Apple manufacturer data, type 5, four 2-byte contact hashes) **[observed]** | Unknown whether a Mac announces on the LAN all the time while discoverable, only while a Finder AirDrop window/share sheet is open, or only after a BLE wake. **Main open question.** |
 | Multicast timing | AWDL drops multicast outside its slots, so announcements repeat every 2 s **[observed]** | Normal mDNS timing should suffice; repeating is harmless |
 | Firewall | Rules for link-local on `awdl0` | Inbound TCP (our port) and UDP 5353 on the Private profile, local subnet only |
@@ -381,16 +381,16 @@ The "Search for an Older Mac" button disappeared from Finder years ago.
 Three outcomes are possible **[hypothesis]**:
 
 1. The key still makes `sharingd` browse and announce `_airdrop._tcp` on all
-   interfaces with the modern protocol. Ferry works as designed.
-2. It works for browsing only (or announcing only). Ferry works in one
+   interfaces with the modern protocol. Veer works as designed.
+2. It works for browsing only (or announcing only). Veer works in one
    direction; the other needs another approach.
-3. It is ignored. Ferry's LAN design does not work, and the alternatives are
+3. It is ignored. Veer's LAN design does not work, and the alternatives are
    a radio-level AWDL implementation (as winawdl does, card-specific and
    GPL-tainted) or something else entirely.
 
-Telling these apart is the first thing `ferry discover` and the Mac test
+Telling these apart is the first thing `veer discover` and the Mac test
 script are for. Useful checks on the Mac: `dns-sd -B _airdrop._tcp` (does
-the Mac's own browser see Ferry's announcement on `en0`?), `dns-sd -L <id>
+the Mac's own browser see Veer's announcement on `en0`?), `dns-sd -L <id>
 _airdrop._tcp` (does the Mac announce itself, on which interface?), and
 `log stream --predicate 'subsystem == "com.apple.sharing"'`.
 
@@ -401,7 +401,7 @@ _airdrop._tcp` (does the Mac announce itself, on which interface?), and
 - Contacts Only needs an Apple-issued certificate plus the matching validation
   record (`SenderRecordData` / `ReceiverRecordData`, a CMS blob holding hashes
   of the account's phone numbers and e-mail addresses). omdrop obtains one
-  from an Apple account **[code]**. **Out of scope for Ferry.**
+  from an Apple account **[code]**. **Out of scope for Veer.**
 - The record's hashes are reversible to phone numbers by brute force; nothing
   of it should be logged **[code comment, omdrop]**.
 
@@ -436,15 +436,15 @@ Known" contact suspiciously well **[hypothesis]**.
 
 ### What the references' results imply **[hypothesis]**
 
-- **Mac → Ferry (Ferry receives):** omdrop's receiver, which knows nothing
+- **Mac → Veer (Veer receives):** omdrop's receiver, which knows nothing
   about codes, stored a transfer from a Mac on **macOS 27** on 2026-10-11 in
   Everyone mode **[observed]**. The code is shown by the *receiver*; a
   receiver that does not offer the feature apparently gets the pre-26.2 flow.
   Most likely the capability is negotiated (a TXT key, a `flags` bit,
-  `DeviceSupportFlags`, or a key in the Discover answer) and Ferry, not
+  `DeviceSupportFlags`, or a key in the Discover answer) and Veer, not
   advertising it, is treated as an older device. **Expected to work.**
-- **Ferry → Mac (Ferry sends):** the Mac is the one that would show a code.
-  If the Mac sees Ferry as a pre-26.2 sender, it should fall back to the old
+- **Veer → Mac (Veer sends):** the Mac is the one that would show a code.
+  If the Mac sees Veer as a pre-26.2 sender, it should fall back to the old
   Accept/Decline prompt, as Apple says both sides need 26.2. If instead the
   Mac demands a code from every unknown sender, the Ask will come back with
   some new status or keys, or the Mac will expect one of the new endpoints.
@@ -454,9 +454,9 @@ Known" contact suspiciously well **[hypothesis]**.
   2. capture the exchange between two real Macs on 26.2+ (only possible on
      AWDL with keys from the Mac, or over the LAN if the Macs use it), to
      learn the request that carries the code;
-  3. only then decide whether Ferry can prompt for the code in the console.
+  3. only then decide whether Veer can prompt for the code in the console.
 
-## Implications for Ferry's Phase 1
+## Implications for Veer's Phase 1
 
 - Reuse winawdl's approach (MIT): plain-socket mDNS, bounded HTTP/TLS
   handling, DVZip + odc CPIO writer, CPIO reader for all three formats,
@@ -465,19 +465,19 @@ Known" contact suspiciously well **[hypothesis]**.
 - No BLE in Phase 1. If a Mac only announces after a BLE wake, that is a
   finding, and BLE advertising from Windows is possible (winawdl does it
   through the WinRT Bluetooth API from PowerShell).
-- `ferry discover` prints everything it hears: the full TXT record, every
+- `veer discover` prints everything it hears: the full TXT record, every
   address, and the full Discover answer, so the first Mac test gives us
   the missing facts above.
 - Port 5353 on Windows: other programs share it (on this PC, Spotify on
   `0.0.0.0:5353` and Steam on `[::]:5353`; Windows' own mDNS responder in
   `dnscache` may too). Sharing needs `SO_REUSEADDR` on every socket; to be
-  verified in Phase 1 that both Ferry and the system resolver still receive
+  verified in Phase 1 that both Veer and the system resolver still receive
   the multicast responses.
 
 ## Licensing note
 
-Everything Ferry is planned to derive code from (winawdl's `airdrop/`,
+Everything Veer is planned to derive code from (winawdl's `airdrop/`,
 omdrop) is MIT. OpenDrop (GPLv3) is used here only as a source of facts — the
 flag names and meanings, the record layout — which are not copyrightable
-expression; no OpenDrop code is copied. So Ferry can be MIT, carrying
+expression; no OpenDrop code is copied. So Veer can be MIT, carrying
 winawdl's and omdrop's MIT notices for the adapted parts.
