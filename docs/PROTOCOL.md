@@ -548,13 +548,119 @@ What `sharingd` does with Veer (its log, `process == "sharingd"`):
   (`lsof -iTCP -sTCP:LISTEN`), so as a receiver it has nothing to offer on
   the LAN at that moment.
 
-Reading: on macOS 26.2, a Bonjour result is only taken further once the
-same service is reachable over AWDL; one heard on Wi-Fi or Ethernet waits
-for AWDL forever **[hypothesis, strongly suggested by the log]**. This is
-outcome 2 or 3 of [BrowseAllInterfaces](#browseallinterfaces-what-it-historically-did):
-the browsing half of the setting survives, the use of what it finds does
-not. What remains to check: whether a defaults key turns the legacy
-implementation, or non-AWDL Bonjour results, back on.
+Reading: on macOS 26.2, a Bonjour result is only taken further if that same
+result was observed on the `awdl0` interface; one heard on Wi-Fi or Ethernet
+is dropped. This was first read from the log as a hypothesis and then
+**confirmed by decompiling `sharingd`** — see
+[the awdl0 gate](#macos-262-the-awdl0-gate-in-sharingd). It is outcome 2/3 of
+[BrowseAllInterfaces](#browseallinterfaces-what-it-historically-did): the
+browsing half of the setting survives, the use of what it finds does not.
+
+## macOS 26.2: the awdl0 gate in sharingd
+
+The "First test" section above saw `sharingd` find Veer over Bonjour on `en0`
+and then log `AWDL not yet available`, going no further. To learn *why* — a
+preference we could set, a timing race, or a deliberate check — the macOS 26.2
+`/usr/libexec/sharingd` binary was disassembled. This is interoperability
+research on a copy of the binary from one's own Mac; the binary is not
+redistributed (it is ignored by git) and no Apple code is copied into Veer.
+
+Binary: `sharingd`, macOS 26.2, universal Mach-O (x86_64 + arm64e),
+SHA-256 `044cae134a43814014abe60e790b4c10d7bf2e9f0e47f1b9df949b0da519e21a`;
+arm64e slice read in Ghidra. Function names below are Ghidra's `FUN_<addr>`
+labels for this exact binary.
+
+### The modern browser's awdl0 gate
+
+The browser is `SDAirDropBonjourBrowser`, the Bonjour browser of the modern
+`AirDropNW` (Network.framework) discovery — the one the live log showed
+running. Two handlers lead to a discovered
+Bonjour service actually being used — populating
+`serviceNamesToBrowseResult` and calling the processing routine
+`FUN_10054aa30`:
+
+- `FUN_1003e6ac4` — a result is **found** (initial discovery). It first calls
+  `FUN_1003e7ae8` ("already discovering/discovered?"); if the result is new it
+  consults the gate below.
+- `FUN_1003e6198` — a result's **TXT record changed** (`.metadataChanged`).
+  Same gate.
+
+Both call the same gate function, **`FUN_1005ba7e0`**, and only process the
+result if it returns true; otherwise they log `AWDL not yet available for
+serviceName %s` and return without doing anything.
+
+`FUN_1005ba7e0` takes no arguments and returns a bool. It reads
+`NWBrowser.Result.interfaces` — the list of network interfaces this Bonjour
+result was observed on — iterates it, and compares each `NWInterface.name`
+against the string `"awdl0"` (seen in the decompile as the small-string
+constant `0x306c647761`, little-endian `a w d l 0`). It returns true the
+moment it finds `awdl0`, and false if it reaches the end without one.
+
+### A second, gate-free browser exists
+
+Following the strings further showed the gate is **not** the whole story.
+`sharingd` carries two parallel AirDrop browse stacks:
+
+| Stack | Bonjour browser | `awdl0` gate? | Driven by |
+|---|---|---|---|
+| Modern `AirDropNW` (Network.framework) | `SDAirDropBonjourBrowser` | **yes** | the Finder AirDrop window and the apps' Share sheet |
+| Classic `SFBrowser` / SharingService | `SDBonjourBrowser` | **no** | a client of the classic SharingService API |
+
+The gate function `FUN_1005ba7e0` has exactly two callers, both in the modern
+browser. The older `SDBonjourBrowser` never calls it. And `SDBonjourBrowser` is
+live code, not a leftover: it is allocated and started by
+`SDServerBrowser::startAirDropBrowsing:connection:sessionID:`, which is driven
+by `SDNodeBrowser::loadAirDrop` when an `SFBrowser` of kind
+`kSFBrowserKindAirDrop` is created — the classic SharingService browse API.
+
+### Conclusion
+
+On macOS 26.2 the *modern* AirDrop browser (`AirDropNW` /
+`SDAirDropBonjourBrowser`) processes a discovered service **only if the result
+arrived on the `awdl0` interface**; a result seen only on `en0` is dropped with
+`AWDL not yet available`, on both the discovery and the TXT-change paths. This
+is the direct cause of the first Mac test, and it is a deliberate check, not a
+misconfiguration. The Finder AirDrop window and the apps' Share sheet both use
+this gated stack — confirmed on the Mac: neither showed Veer on the LAN.
+
+The *classic* SharingService stack (`SDBonjourBrowser`) has no such gate and is
+still present and reachable — but only when a client drives it through the
+`SFBrowser` API. None of the native surfaces tested use it.
+
+So an earlier reading that this was "blocked by design on all paths" was wrong:
+a non-AWDL LAN result *is* usable by `sharingd`'s classic browser; it is simply
+not the browser the current native UI runs. `BrowseAllInterfaces` still makes
+`sharingd` *browse* `_airdrop._tcp` on all interfaces and find Veer on `en0`;
+the modern stack then discards it. The LAN design most likely worked on older
+macOS, before the modern gated stack became the default; which versions that
+covers is untested.
+
+### What this means for Veer
+
+There are two ways to reach a Mac's real AirDrop over a LAN, and each has a hard
+cost:
+
+1. **Native visibility with nothing installed on the Mac** requires the result
+   to arrive on `awdl0`, i.e. the PC must *speak AWDL*. That is a radio/driver
+   effort on Windows (a compatible adapter with monitor mode + injection),
+   card-specific, and the GPL path winawdl already takes. It does not touch the
+   Mac.
+2. **The gate-free classic stack** requires a client on the Mac to drive the
+   `SFBrowser` SharingService API. That is an ordinary userland helper (no SIP,
+   no kernel, no AWDL), but it is software on the Mac — at which point the
+   result is functionally a LAN file transfer like LocalSend or SFTP, and the
+   AirDrop protocol gives the user nothing extra.
+
+There is no clean switch in between. The browser choice is not a readable
+preference (the legacy-mode keys are never read to select it); it follows which
+API drives discovery. Forcing a stock `sharingd` onto the classic browser would
+mean modifying the signed system daemon at runtime, which requires disabling the
+Mac's platform security (SIP, code signing, library validation) —
+undistributable, update-fragile, and out of scope.
+
+The durable result of this work is the map itself: two parallel stacks, the
+`awdl0` gate on the modern one, and the gate-free classic path, documented and
+reproducible.
 
 ## Licensing note
 
