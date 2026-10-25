@@ -508,6 +508,54 @@ Choices made, to be checked against a Mac:
 - Received links are stored as inert `.url` files, so the `0x001` flag bit
   stays set.
 
+## First test against a Mac (macOS 26.2, 2026-10-25)
+
+Mac on Wi-Fi, PC on Ethernet, same subnet; `BrowseAllInterfaces` set,
+Finder and `sharingd` relaunched, AirDrop "Everyone for 10 Minutes".
+**[observed]** unless marked otherwise.
+
+What works:
+
+- Multicast DNS crosses between the Mac's Wi-Fi and the PC's Ethernet in
+  both directions; `dns-sd -B _airdrop._tcp` on the Mac lists Veer.
+- With the AirDrop window open, and no `dns-sd` running, the Mac sends
+  `_airdrop._tcp.local PTR` queries on the LAN over IPv4 and IPv6, in the
+  usual restarting back-off pattern of a browse.
+- The Mac reaches Veer over HTTPS: `curl -k -X POST .../Discover` from the
+  Mac gets Veer's answer, which `plutil` decodes (`IsAirDropable` etc.).
+
+What `sharingd` does with Veer (its log, `process == "sharingd"`):
+
+- AirDrop discovery is now `AirDropNW` on Network.framework, and runs two
+  browsers side by side:
+  - an **"application service" browser**, `nw_browse_descriptor
+    application_service` for `com.apple.sharingd.AirDrop`, which is what
+    found the iPhones and the Watch nearby (by name and model, with no
+    Bonjour involved);
+  - a **Bonjour browser**, `nw_browse_descriptor bonjour _airdrop._tcp
+    (txt)`, started with DNS-SD flags `0x40104000`.
+- The Bonjour browser **does find Veer on `en0`** (`if_index: 14`,
+  `Bonjour#…@[en0]`) and reads its TXT record. So `BrowseAllInterfaces`
+  still takes effect for browsing.
+- `sharingd` then logs `Unknown bonjour result change` and
+  **`AWDL not yet available for serviceName <private>`**, and does nothing
+  more with it: no `/Discover` is ever sent to Veer.
+- The session metric logs `"legacy": false`, so a non-`AirDropNW`
+  implementation seems to still exist **[hypothesis]**.
+- `sharingd` looks up other keys in the `com.apple.NetworkBrowser` domain
+  (e.g. `AlwaysSendPayload`, found unset).
+- While the AirDrop window is open the Mac listens on no TCP port at all
+  (`lsof -iTCP -sTCP:LISTEN`), so as a receiver it has nothing to offer on
+  the LAN at that moment.
+
+Reading: on macOS 26.2, a Bonjour result is only taken further once the
+same service is reachable over AWDL; one heard on Wi-Fi or Ethernet waits
+for AWDL forever **[hypothesis, strongly suggested by the log]**. This is
+outcome 2 or 3 of [BrowseAllInterfaces](#browseallinterfaces-what-it-historically-did):
+the browsing half of the setting survives, the use of what it finds does
+not. What remains to check: whether a defaults key turns the legacy
+implementation, or non-AWDL Bonjour results, back on.
+
 ## Licensing note
 
 Everything Veer is planned to derive code from (winawdl's `airdrop/`,
