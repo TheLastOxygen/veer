@@ -471,9 +471,42 @@ Known" contact suspiciously well **[hypothesis]**.
   the missing facts above.
 - Port 5353 on Windows: other programs share it (on this PC, Spotify on
   `0.0.0.0:5353` and Steam on `[::]:5353`; Windows' own mDNS responder in
-  `dnscache` may too). Sharing needs `SO_REUSEADDR` on every socket; to be
-  verified in Phase 1 that both Veer and the system resolver still receive
-  the multicast responses.
+  `dnscache` may too). Sharing needs `SO_REUSEADDR` on every socket.
+
+## What Phase 1 settled on this PC (Windows 11, 2026-10-25)
+
+Verified, without a Mac:
+
+- **UDP 5353 is shared with Windows' resolver both ways.** With
+  `SO_REUSEADDR`, Veer's IPv4 and IPv6 sockets receive the mDNS queries
+  `Resolve-DnsName x.local` makes, and `Resolve-DnsName veer-<id>.local`
+  resolves through Veer's announcement (A, AAAA, SRV, TXT, NSEC all listed).
+- **Browsing also asks from an ephemeral port**, whose answers come back by
+  unicast (RFC 6762 6.7), so they reach Veer whatever else shares 5353.
+  Windows Firewall lets a unicast answer to a multicast query through by
+  default ("allow unicast response").
+- **Multicast works on the loopback interface**, which the tests use to run
+  two copies of Veer that find each other over mDNS.
+- Announcing and browsing, then the whole Discover/Ask/Upload exchange, work
+  between two copies of Veer on this PC's **Ethernet** interface, over IPv4
+  and over scoped link-local IPv6.
+- Python's `http.server` refuses to read again from a connection once a read
+  has timed out. After answering an upload whose body never ended, Veer reads
+  what follows straight from the TLS socket, so a Mac's late closing chunk is
+  read instead of being met with a reset.
+
+Choices made, to be checked against a Mac:
+
+- Veer announces an A record and the link-local AAAA of each interface, plus
+  an NSEC listing exactly those types. Whether a Mac on a LAN prefers IPv4 or
+  IPv6 is unknown.
+- Receiver port 8771; `flags=1019` (0x3fb); model `MacBookPro18,3`; name
+  `<PC name> (Veer)`; User-Agent `AirDrop/1.0 Veer/<version>`; a declined Ask
+  answers 401.
+- Veer's receiver accepts connections only from the subnets (and the
+  link-local scope) of the interfaces it announces on, and loopback.
+- Received links are stored as inert `.url` files, so the `0x001` flag bit
+  stays set.
 
 ## Licensing note
 
