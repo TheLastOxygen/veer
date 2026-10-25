@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "veer-share"
+version = "0.1.0.dev0"
+description = "Exchange files between Windows and Macs using the AirDrop protocol over the local network"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+requires-python = ">=3.10"
+authors = [{ name = "Simone" }]
+dependencies = ["cryptography>=42"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Communications :: File Sharing",
+]
+
+[project.urls]
+Source = "https://github.com/TheLastOxygen/veer"
+
+[project.scripts]
+veer = "veer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
